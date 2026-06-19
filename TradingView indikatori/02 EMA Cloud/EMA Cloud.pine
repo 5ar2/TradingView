@@ -1,0 +1,24 @@
+//@version=1
+
+//ema 21 plava 89 bijela i 200 crvena
+study("5ar EMA Cloud",overlay=true)
+
+// Assigning variable for 21EMA
+M1=ema(close, 21)
+// Assigning variable for 200EMA
+M2=ema(close, 200)
+
+// Assigning variable for 89EMA
+M3=ema(close, 89)
+
+cloudcolor = M1>M2?green:red
+
+//postavke za iscrtavanje 21 EMA , boja, debljina linije,naziv, prozirnost
+P1 = plot(M1,color=green, linewidth=2,title = 'EMA 21',transp=0)
+//postavke za iscrtavanje 200 EMA , boja, deblina linije,naziv, prozirnost
+P2 = plot(M2,color=red, linewidth=2, title = 'EMA 200',transp=0)
+//postavke za iscrtavanje 89 EMA , boja, deblina linije,naziv, prozirnost
+P3 = plot(M3,color=white, linewidth=2,title = 'EMA 89',transp=0)
+
+//ispuna prostora izmedju 21 i 200 ema, odabir boje, prozirnost
+fill(P1,P2,color = cloudcolor,title="Cloud Fill",transp=90)

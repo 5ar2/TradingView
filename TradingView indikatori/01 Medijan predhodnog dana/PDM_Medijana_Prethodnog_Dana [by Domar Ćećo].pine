@@ -1,0 +1,166 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Domar Ćećo
+
+//@version=6
+indicator("Medijana Prethodnog Dana | PDM", shorttitle="PDM [by Domar Ćećo]", overlay=true,
+     max_lines_count=500, max_labels_count=500)
+
+// ══════════════════════════════════════════════════════════════════
+//  POSTAVKE
+// ══════════════════════════════════════════════════════════════════
+grp_main     = "⚙️  Opće postavke"
+grp_prev_sty = "📅  Završeni dani"
+grp_curr_sty = "⏳  Tekući dan (live)"
+
+lookback_days = input.int(5, "Broj dana unazad",
+     minval=1, maxval=50,
+     tooltip="Broj završenih PDM linija prikazanih na grafikonu",
+     group=grp_main)
+show_label = input.bool(true, "Prikaži oznake", group=grp_main)
+show_value = input.bool(true, "Prikaži cijenu u oznaci", group=grp_main)
+
+// --- Završeni dani ---
+show_prev    = input.bool(true,        "Prikaži medijane završenih dana", group=grp_prev_sty)
+prev_col     = input.color(color.rgb(56, 142, 60),  "Boja",     group=grp_prev_sty)
+prev_wid     = input.int(1, "Debljina", minval=1, maxval=5, group=grp_prev_sty)
+prev_sty_inp = input.string("Dotted",  "Stil",
+     options=["Solid","Dashed","Dotted"], group=grp_prev_sty)
+
+// --- Tekući dan ---
+show_curr    = input.bool(true,          "Prikaži medijan tekućeg dana",  group=grp_curr_sty)
+curr_col     = input.color(color.rgb(91, 156, 246), "Boja",     group=grp_curr_sty)
+curr_wid     = input.int(1, "Debljina",  minval=1, maxval=5, group=grp_curr_sty)
+curr_sty_inp = input.string("Dashed",   "Stil",
+     options=["Solid","Dashed","Dotted"], group=grp_curr_sty)
+
+// Pretvorba stringa u line style  (switch izbjegava CE10156 grešku)
+prev_sty = switch prev_sty_inp
+    "Dashed" => line.style_dashed
+    "Dotted" => line.style_dotted
+    =>           line.style_solid
+
+curr_sty = switch curr_sty_inp
+    "Dashed" => line.style_dashed
+    "Dotted" => line.style_dotted
+    =>           line.style_solid
+
+// ══════════════════════════════════════════════════════════════════
+//  PRETHODNI DAN — kalkulacija medijane
+//  request.security + lookahead_on + [1]:
+//    → vraća high/low PRETHODNOG završenog dana za sve intraday barove
+// ══════════════════════════════════════════════════════════════════
+prev_h      = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+prev_l      = request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge.lookahead_on)
+prev_median = (prev_h + prev_l) / 2.0
+
+// ══════════════════════════════════════════════════════════════════
+//  TEKUĆI DAN — ručno praćenje high/low bar po bar
+//  (siguranija metoda od request.security bez lookahead)
+// ══════════════════════════════════════════════════════════════════
+is_new_day = ta.change(time("D")) != 0
+
+var float today_h = na
+var float today_l = na
+
+if is_new_day or na(today_h)
+    today_h := high
+    today_l := low
+else
+    today_h := math.max(today_h, high)
+    today_l := math.min(today_l, low)
+
+today_median = (today_h + today_l) / 2.0
+
+// ══════════════════════════════════════════════════════════════════
+//  CRTANJE ─ ZAVRŠENI DANI
+// ══════════════════════════════════════════════════════════════════
+var line[]  prev_lines  = array.new_line()
+var label[] prev_labels = array.new_label()
+
+if show_prev and is_new_day and not na(prev_median)
+    t_s = time
+    t_e = time + 86340000
+
+    l = line.new(
+         x1=t_s, y1=prev_median,
+         x2=t_e, y2=prev_median,
+         xloc  = xloc.bar_time,
+         color = prev_col,
+         width = prev_wid,
+         style = prev_sty)
+    array.push(prev_lines, l)
+
+    if show_label
+        txt = show_value
+             ? "PDM  " + str.tostring(prev_median, format.mintick)
+             : "PDM"
+        lbl = label.new(
+             x=t_s, y=prev_median, text=txt,
+             xloc      = xloc.bar_time,
+             color     = color.new(prev_col, 75),
+             textcolor = color.white,
+             style     = label.style_label_right,
+             size      = size.normal)
+        array.push(prev_labels, lbl)
+
+    while array.size(prev_lines) > lookback_days
+        line.delete(array.shift(prev_lines))
+    while array.size(prev_labels) > lookback_days
+        label.delete(array.shift(prev_labels))
+
+// ══════════════════════════════════════════════════════════════════
+//  CRTANJE ─ TEKUĆI DAN  (ažurira se na svakoj svjećici)
+// ══════════════════════════════════════════════════════════════════
+var line  today_line  = na
+var label today_label = na
+var int   today_start = na
+
+if is_new_day
+    if not na(today_line)
+        line.delete(today_line)
+        today_line := na
+    if not na(today_label)
+        label.delete(today_label)
+        today_label := na
+    today_start := time
+
+else if na(today_start)
+    today_start := time("D")
+
+curr_txt = show_value
+     ? "⏳  " + str.tostring(today_median, format.mintick) +
+       "  ◄  Medijan tekućeg dana  — dan još traje, nije finalan"
+     : "⏳  Medijan tekućeg dana  — dan još traje, nije finalan"
+
+if show_curr and not na(today_start)
+    t_ds = today_start
+    t_de = today_start + 86340000
+
+    if na(today_line)
+        today_line := line.new(
+             x1=t_ds, y1=today_median,
+             x2=t_de, y2=today_median,
+             xloc  = xloc.bar_time,
+             color = curr_col,
+             width = curr_wid,
+             style = curr_sty)
+
+        if show_label
+            today_label := label.new(
+                 x=t_de, y=today_median, text=curr_txt,
+                 xloc      = xloc.bar_time,
+                 color     = color.new(curr_col, 70),
+                 textcolor = color.white,
+                 style     = label.style_label_left,
+                 size      = size.normal)
+    else
+        line.set_y1(today_line, today_median)
+        line.set_y2(today_line, today_median)
+        line.set_color(today_line, curr_col)
+        line.set_width(today_line, curr_wid)
+        line.set_style(today_line, curr_sty)
+
+        if show_label and not na(today_label)
+            label.set_y    (today_label, today_median)
+            label.set_text (today_label, curr_txt)
+            label.set_color(today_label, color.new(curr_col, 70))
