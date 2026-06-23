@@ -1,0 +1,36 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Domar Ćećo
+
+//@version=6
+// timeframe="W"      → svi prosjeci kalkuliraju se na tjednom TF bez obzira koji TF gledaš
+// timeframe_gaps=true (default) → plot() spaja tjedne točke dijagonalno = glatke linije, bez stepenica
+indicator("Bull Market Support Band + 8W SMA [by Domar Ćećo]", overlay=true, timeframe="W")
+
+// ══════════════════════════════════════════════════════════════════
+//  KALKULACIJA
+// ══════════════════════════════════════════════════════════════════
+
+// --- Bull Market Support Band (20w SMA + 21w EMA) ---
+// Periodi su fiksni i ne prikazuju se u postavkama
+outSma = ta.sma(close, 20)
+outEma = ta.ema(close, 21)
+
+// --- 8-tjedni SMA ---
+sma8 = ta.sma(close, 8)
+
+// ══════════════════════════════════════════════════════════════════
+//  CRTANJE
+// ══════════════════════════════════════════════════════════════════
+
+// Crtanje 20w SMA linije
+smaPlot = plot(outSma, color=color.red, linewidth=2, title="20w SMA")
+
+// Crtanje 21w EMA linije
+emaPlot = plot(outEma, color=color.green, linewidth=2, title="21w EMA")
+
+// Ispuna između 20w SMA i 21w EMA označava potporni pojas (Support Band)
+// fillgaps=true → kontinuirana ispuna između tjednih vrijednosti na svim TF
+fill(smaPlot, emaPlot, color=color.new(color.orange, 75), fillgaps=true, title="Plots Background")
+
+// Crtanje 8w SMA linije
+plot(sma8, color=color.gray, linewidth=1, title="8w SMA")
